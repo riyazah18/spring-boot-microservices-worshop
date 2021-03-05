@@ -1,57 +1,40 @@
 package io.javabrains.moviecatalogservice.resources;
 
-import io.javabrains.moviecatalogservice.models.CatalogItem;
-import io.javabrains.moviecatalogservice.models.Movie;
-import io.javabrains.moviecatalogservice.models.Rating;
-import io.javabrains.moviecatalogservice.models.UserRating;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
+import io.javabrains.moviecatalogservice.models.CatalogItem;
+import io.javabrains.moviecatalogservice.models.UserRating;
+import io.javabrains.moviecatalogservice.services.MovieInfoServuce;
+import io.javabrains.moviecatalogservice.services.RatingInfoService;
 
 @RestController
 @RequestMapping("/catalog")
 public class CatalogResource {
 
+  
     @Autowired
-    private RestTemplate restTemplate;
+    private MovieInfoServuce movieInfoService;
+    private RatingInfoService ratingInfoService;
 
     @Autowired
     WebClient.Builder webClientBuilder;
 
-    @RequestMapping("/{userId}")
-    @HystrixCommand(fallbackMethod = "getFallbackCatalog")
+    @RequestMapping("/{userId}")   
     public List<CatalogItem> getCatalog(@PathVariable("userId") String userId) {
+        UserRating userRating = ratingInfoService.getUserRatings(userId);
+        return userRating.getRatings().stream().map(
+        		rating -> movieInfoService.getCatalogItem(rating)
+        		).collect(Collectors.toList());
 
-        UserRating userRating = restTemplate.getForObject("http://ratings-data-service/ratingsdata/user/" + userId, UserRating.class);
-
-        return userRating.getRatings().stream()
-                .map(rating -> {
-                    Movie movie = restTemplate.getForObject("http://movie-info-service/movies/" + rating.getMovieId(), Movie.class);
-                    return new CatalogItem(movie.getName(), movie.getDescription(), rating.getRating());
-                })
-                .collect(Collectors.toList());
-
-    }
-    
-    /**
-     * FallbackMethod : call incase of fall back or service down.
-     * @param userId
-     * @return
-     */
-    public List<CatalogItem> getFallbackCatalog(@PathVariable("userId") String userId) {
-
-       return Arrays.asList(new CatalogItem("No Movie","",0));
-    }
+    }    
+   
 }
 
 /*
